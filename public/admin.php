@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $search = trim((string) ($_GET['q'] ?? ''));
+$nowTs = time();
 
 if ($search !== '') {
     $stmt = db()->prepare('
@@ -110,11 +111,15 @@ render_header('Admin', $staff);
             <?php endif ?>
         </div>
     </form>
-    <?php if ($search !== '' && !empty($docs)): ?>
+    <?php if ($search !== ''): ?>
         <p class="search-meta"><?= count($docs) ?> result(s) for "<?= h($search) ?>"</p>
     <?php endif ?>
     <?php if (empty($docs)): ?>
-        <p class="empty">No documents yet.</p>
+        <?php if ($search !== ''): ?>
+            <p class="empty">No documents found for this search.</p>
+        <?php else: ?>
+            <p class="empty">No documents yet.</p>
+        <?php endif ?>
     <?php else: ?>
         <table class="data">
             <thead>
@@ -130,10 +135,18 @@ render_header('Admin', $staff);
             </thead>
             <tbody>
                 <?php foreach ($docs as $d): ?>
+                    <?php $isScheduled = !empty($d['publish_at']) && strtotime($d['publish_at']) > $nowTs; ?>
                     <tr>
                         <td class="id">#<?= (int) $d['id'] ?></td>
                         <td><code><?= h((string) ($d['readable_id'] ?? '')) ?></code></td>
-                        <td><?= h($d['title']) ?></td>
+                        <td>
+                            <?= h($d['title']) ?>
+                            <?php if ($isScheduled): ?>
+                                <span class="status-badge status-badge-scheduled">Scheduled</span>
+                            <?php else: ?>
+                                <span class="status-badge status-badge-live">Live</span>
+                            <?php endif ?>
+                        </td>
                         <td><?= h($d['creator_name']) ?></td>
                         <td><?= h($d['created_at']) ?></td>
                         <td><?= h((string) ($d['publish_at'] ?? 'Now')) ?></td>
