@@ -61,5 +61,24 @@ test('creating documents assigns unique readable IDs', function () {
     assert_true(strpos($rows[0]['readable_id'], 'onboarding-packet-') === 0, 'first readable_id prefix mismatch');
 });
 
+test('scheduled documents are hidden before publish_at and visible after', function () {
+    $staff = current_staff();
+    $publishAt = date('Y-m-d H:i:s', time() + 3600);
+
+    $docId = create_document('Scheduled Notice', 'Body', (int) $staff['id'], $publishAt);
+
+    $token = random_token();
+    $insertShare = db()->prepare('INSERT INTO shares (document_id, token, recipient_email) VALUES (?, ?, ?)');
+    $insertShare->execute([$docId, $token, 'future@example.com']);
+
+    $stmt = db()->prepare('SELECT * FROM documents WHERE id = ?');
+    $stmt->execute([$docId]);
+    $doc = $stmt->fetch();
+
+    assert_true($doc !== false, 'expected scheduled document to exist');
+    assert_true(is_document_published($doc, time()) === false, 'expected document to be hidden before publish time');
+    assert_true(is_document_published($doc, time() + 7200) === true, 'expected document to be visible after publish time');
+});
+
 echo "\n{$pass} passed, {$fail} failed.\n";
 exit($fail > 0 ? 1 : 0);

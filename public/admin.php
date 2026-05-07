@@ -9,20 +9,31 @@ $error = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = trim($_POST['title'] ?? '');
     $body = trim($_POST['body'] ?? '');
+    $publishAtInput = trim((string) ($_POST['publish_at'] ?? ''));
+    $publishAt = parse_publish_at_input($publishAtInput);
 
     if ($title === '' || $body === '') {
         $error = 'Title and body are required.';
+    } elseif ($publishAtInput !== '' && $publishAt === null) {
+        $error = 'Publish time must be a valid date/time.';
     } else {
-        $docId = create_document($title, $body, (int) $staff['id']);
+        $docId = create_document($title, $body, (int) $staff['id'], $publishAt);
 
-        $docStmt = db()->prepare('SELECT readable_id FROM documents WHERE id = ?');
+        $docStmt = db()->prepare('SELECT readable_id, publish_at FROM documents WHERE id = ?');
         $docStmt->execute([$docId]);
         $createdDoc = $docStmt->fetch();
 
         audit_log('create', 'document', $docId, [
             'title' => $title,
             'readable_id' => $createdDoc['readable_id'] ?? null,
+            'publish_at' => $createdDoc['publish_at'] ?? null,
         ]);
+
+        if (!empty($createdDoc['publish_at'])) {
+            audit_log('schedule', 'document', $docId, [
+                'publish_at' => $createdDoc['publish_at'],
+            ]);
+        }
 
         header('Location: /admin.php?created=' . $docId . '&rid=' . urlencode((string) ($createdDoc['readable_id'] ?? '')));
         exit;
@@ -66,6 +77,10 @@ render_header('Admin', $staff);
             <label for="body">Body</label>
             <textarea id="body" name="body" required></textarea>
         </div>
+        <div class="form-field">
+            <label for="publish_at">Publish at (optional)</label>
+            <input type="datetime-local" id="publish_at" name="publish_at">
+        </div>
         <button type="submit" class="btn">Create document</button>
     </form>
 </section>
@@ -83,6 +98,7 @@ render_header('Admin', $staff);
                     <th>Title</th>
                     <th>Creator</th>
                     <th>Created</th>
+                    <th>Publish At</th>
                     <th></th>
                 </tr>
             </thead>
@@ -94,6 +110,7 @@ render_header('Admin', $staff);
                         <td><?= h($d['title']) ?></td>
                         <td><?= h($d['creator_name']) ?></td>
                         <td><?= h($d['created_at']) ?></td>
+                        <td><?= h((string) ($d['publish_at'] ?? 'Now')) ?></td>
                         <td><a href="/share.php?doc=<?= urlencode((string) ($d['readable_id'] ?? (string) $d['id'])) ?>" class="btn-link">Create share →</a></td>
                     </tr>
                 <?php endforeach ?>

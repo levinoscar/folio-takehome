@@ -56,17 +56,45 @@ function generate_readable_id(string $title): string {
     return $base . '-' . $suffix;
 }
 
-function create_document(string $title, string $body, int $createdBy): int {
+function parse_publish_at_input(string $raw): ?string {
+    $raw = trim($raw);
+    if ($raw === '') {
+        return null;
+    }
+
+    $dt = DateTimeImmutable::createFromFormat('Y-m-d\\TH:i', $raw);
+    if (!$dt) {
+        return null;
+    }
+
+    return $dt->format('Y-m-d H:i:s');
+}
+
+function is_document_published(array $doc, ?int $nowTs = null): bool {
+    if (empty($doc['publish_at'])) {
+        return true;
+    }
+
+    $publishTs = strtotime((string) $doc['publish_at']);
+    if ($publishTs === false) {
+        return true;
+    }
+
+    $currentTs = $nowTs ?? time();
+    return $publishTs <= $currentTs;
+}
+
+function create_document(string $title, string $body, int $createdBy, ?string $publishAt = null): int {
     $attempts = 0;
     while ($attempts < 5) {
         $attempts++;
         $readableId = generate_readable_id($title);
         try {
             $stmt = db()->prepare('
-                INSERT INTO documents (title, body, created_by, readable_id)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO documents (title, body, created_by, readable_id, publish_at)
+                VALUES (?, ?, ?, ?, ?)
             ');
-            $stmt->execute([$title, $body, $createdBy, $readableId]);
+            $stmt->execute([$title, $body, $createdBy, $readableId, $publishAt]);
             return (int) db()->lastInsertId();
         } catch (PDOException $e) {
             if (strpos($e->getMessage(), 'documents.readable_id') === false) {
