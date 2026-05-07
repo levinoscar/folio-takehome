@@ -43,6 +43,41 @@ function random_token(int $bytes = 16): string {
     return bin2hex(random_bytes($bytes));
 }
 
+function slugify(string $input): string {
+    $value = strtolower(trim($input));
+    $value = preg_replace('/[^a-z0-9]+/', '-', $value);
+    $value = trim((string) $value, '-');
+    return $value !== '' ? $value : 'doc';
+}
+
+function generate_readable_id(string $title): string {
+    $base = slugify($title);
+    $suffix = strtolower(substr(bin2hex(random_bytes(2)), 0, 4));
+    return $base . '-' . $suffix;
+}
+
+function create_document(string $title, string $body, int $createdBy): int {
+    $attempts = 0;
+    while ($attempts < 5) {
+        $attempts++;
+        $readableId = generate_readable_id($title);
+        try {
+            $stmt = db()->prepare('
+                INSERT INTO documents (title, body, created_by, readable_id)
+                VALUES (?, ?, ?, ?)
+            ');
+            $stmt->execute([$title, $body, $createdBy, $readableId]);
+            return (int) db()->lastInsertId();
+        } catch (PDOException $e) {
+            if (strpos($e->getMessage(), 'documents.readable_id') === false) {
+                throw $e;
+            }
+        }
+    }
+
+    throw new RuntimeException('Failed to create a unique readable document ID after multiple attempts.');
+}
+
 function h(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }

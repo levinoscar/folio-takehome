@@ -44,5 +44,22 @@ test('seeded share link resolves to the seeded document', function () {
     assert_true($row['title'] === 'Welcome Packet', 'unexpected title: ' . var_export($row['title'], true));
 });
 
+test('creating documents assigns unique readable IDs', function () {
+    $staff = current_staff();
+
+    $docA = create_document('Onboarding Packet', 'Body A', (int) $staff['id']);
+    $docB = create_document('Onboarding Packet', 'Body B', (int) $staff['id']);
+
+    $stmt = db()->prepare('SELECT readable_id FROM documents WHERE id IN (?, ?) ORDER BY id ASC');
+    $stmt->execute([$docA, $docB]);
+    $rows = $stmt->fetchAll();
+
+    assert_true(count($rows) === 2, 'expected 2 created documents');
+    assert_true($rows[0]['readable_id'] !== '', 'first readable_id should not be empty');
+    assert_true($rows[1]['readable_id'] !== '', 'second readable_id should not be empty');
+    assert_true($rows[0]['readable_id'] !== $rows[1]['readable_id'], 'readable IDs should be unique');
+    assert_true(strpos($rows[0]['readable_id'], 'onboarding-packet-') === 0, 'first readable_id prefix mismatch');
+});
+
 echo "\n{$pass} passed, {$fail} failed.\n";
 exit($fail > 0 ? 1 : 0);

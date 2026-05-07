@@ -4,9 +4,20 @@ require __DIR__ . '/../lib/bootstrap.php';
 require __DIR__ . '/../lib/layout.php';
 
 $staff = current_staff();
-$docId = (int) ($_GET['doc'] ?? 0);
-$stmt = db()->prepare('SELECT * FROM documents WHERE id = ?');
-$stmt->execute([$docId]);
+$docRef = trim((string) ($_GET['doc'] ?? ''));
+
+if ($docRef === '') {
+    $docRef = '0';
+}
+
+if (ctype_digit($docRef)) {
+    $stmt = db()->prepare('SELECT * FROM documents WHERE id = ?');
+    $stmt->execute([(int) $docRef]);
+} else {
+    $stmt = db()->prepare('SELECT * FROM documents WHERE readable_id = ?');
+    $stmt->execute([$docRef]);
+}
+
 $doc = $stmt->fetch();
 
 if (!$doc) {
@@ -50,6 +61,7 @@ render_header('Share · ' . $doc['title'], $staff);
 
 <h1 class="page-title">Share "<?= h($doc['title']) ?>"</h1>
 <p class="page-subtitle">Generate a one-time link for a recipient.</p>
+<p class="meta">Document ID: <code><?= h((string) ($doc['readable_id'] ?? '')) ?></code></p>
 
 <?php if ($error): ?>
     <div class="banner banner-error"><?= h($error) ?></div>

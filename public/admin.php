@@ -13,16 +13,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($title === '' || $body === '') {
         $error = 'Title and body are required.';
     } else {
-        $stmt = db()->prepare('
-            INSERT INTO documents (title, body, created_by)
-            VALUES (?, ?, ?)
-        ');
-        $stmt->execute([$title, $body, $staff['id']]);
-        $docId = (int) db()->lastInsertId();
+        $docId = create_document($title, $body, (int) $staff['id']);
 
-        audit_log('create', 'document', $docId, ['title' => $title]);
+        $docStmt = db()->prepare('SELECT readable_id FROM documents WHERE id = ?');
+        $docStmt->execute([$docId]);
+        $createdDoc = $docStmt->fetch();
 
-        header('Location: /admin.php?created=' . $docId);
+        audit_log('create', 'document', $docId, [
+            'title' => $title,
+            'readable_id' => $createdDoc['readable_id'] ?? null,
+        ]);
+
+        header('Location: /admin.php?created=' . $docId . '&rid=' . urlencode((string) ($createdDoc['readable_id'] ?? '')));
         exit;
     }
 }
@@ -41,7 +43,12 @@ render_header('Admin', $staff);
 <p class="page-subtitle">Create documents and generate share links for recipients.</p>
 
 <?php if (!empty($_GET['created'])): ?>
-    <div class="banner banner-success">Document #<?= (int) $_GET['created'] ?> created.</div>
+    <div class="banner banner-success">
+        Document #<?= (int) $_GET['created'] ?> created
+        <?php if (!empty($_GET['rid'])): ?>
+            (ID: <?= h((string) $_GET['rid']) ?>)
+        <?php endif ?>.
+    </div>
 <?php endif ?>
 
 <?php if ($error): ?>
@@ -72,6 +79,7 @@ render_header('Admin', $staff);
             <thead>
                 <tr>
                     <th>ID</th>
+                    <th>Readable ID</th>
                     <th>Title</th>
                     <th>Creator</th>
                     <th>Created</th>
@@ -82,10 +90,11 @@ render_header('Admin', $staff);
                 <?php foreach ($docs as $d): ?>
                     <tr>
                         <td class="id">#<?= (int) $d['id'] ?></td>
+                        <td><code><?= h((string) ($d['readable_id'] ?? '')) ?></code></td>
                         <td><?= h($d['title']) ?></td>
                         <td><?= h($d['creator_name']) ?></td>
                         <td><?= h($d['created_at']) ?></td>
-                        <td><a href="/share.php?doc=<?= (int) $d['id'] ?>" class="btn-link">Create share →</a></td>
+                        <td><a href="/share.php?doc=<?= urlencode((string) ($d['readable_id'] ?? (string) $d['id'])) ?>" class="btn-link">Create share →</a></td>
                     </tr>
                 <?php endforeach ?>
             </tbody>
