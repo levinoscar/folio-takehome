@@ -80,5 +80,34 @@ test('scheduled documents are hidden before publish_at and visible after', funct
     assert_true(is_document_published($doc, time() + 7200) === true, 'expected document to be visible after publish time');
 });
 
+test('search by title prefix returns matching documents', function () {
+    $staff = current_staff();
+
+    create_document('Search Alpha Doc', 'Body', (int) $staff['id']);
+    create_document('Search Beta Doc',  'Body', (int) $staff['id']);
+    create_document('Unrelated Title',  'Body', (int) $staff['id']);
+
+    $stmt = db()->prepare('
+        SELECT * FROM documents
+        WHERE title LIKE ?
+        ORDER BY created_at DESC
+    ');
+    $stmt->execute(['Search%']);
+    $rows = $stmt->fetchAll();
+
+    assert_true(count($rows) >= 2, 'expected at least 2 matching documents');
+    foreach ($rows as $row) {
+        assert_true(stripos($row['title'], 'Search') === 0, 'unexpected result: ' . $row['title']);
+    }
+});
+
+test('search by title prefix returns nothing for unknown prefix', function () {
+    $stmt = db()->prepare('SELECT * FROM documents WHERE title LIKE ?');
+    $stmt->execute(['ZZZNOMATCH%']);
+    $rows = $stmt->fetchAll();
+
+    assert_true(count($rows) === 0, 'expected 0 results for unmatched prefix');
+});
+
 echo "\n{$pass} passed, {$fail} failed.\n";
 exit($fail > 0 ? 1 : 0);
